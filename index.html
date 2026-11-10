@@ -43,7 +43,17 @@
   .auto-speak input { accent-color: #4c7cf0; }
   .bar { height: 6px; background: #edf1f8; border-radius: 99px; overflow: hidden; margin-bottom: 22px; }
   .bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, #4c7cf0, #f0913c); border-radius: 99px; transition: width .3s; }
-  .word { text-align: center; margin: 8px 0 6px; }
+  .word { text-align: center; margin: 8px 0 6px; position: relative; }
+  .flag-box {
+    position: absolute; right: 6px; top: 4px;
+    width: 46px; height: 46px; padding: 0;
+    border: 2px solid #cbd6ea; border-radius: 12px; background: #fff;
+    color: #219a5b; font-size: 24px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all .15s;
+  }
+  .flag-box:hover { border-color: #9db8ee; background: #f2f7ff; }
+  .flag-box.on { border-color: #3bb273; background: #eaf8f0; }
   .mode-btn {
     position: absolute; top: -14px; right: -36px; z-index: 6;
     border: none; background: linear-gradient(135deg, #4c7cf0, #6a5cf0);
@@ -157,6 +167,7 @@
 
     <div id="quiz">
       <div class="word">
+        <button class="flag-box" id="flagBox" title="标记重点(效果同答错)"></button>
         <div class="en" id="word">—</div>
         <div class="ph" id="phonetic"></div>
         <button class="spk" id="speakWord" title="点击发音">🔊</button>
@@ -229,7 +240,14 @@ let current = null;
 let currentAudio = null;
 let displayMode = "en2zh";
 let roundMode = "normal";
+let flagged = false;
 const sess = () => sessions[displayMode];
+
+function setFlag(on) {
+  flagged = !!on;
+  const b = $("flagBox");
+  if (b) { b.textContent = flagged ? "✓" : ""; b.classList.toggle("on", flagged); }
+}
 
 const $ = id => document.getElementById(id);
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -411,6 +429,7 @@ function renderQuestion() {
   const aText = isZh2En ? q.w : sense;
   current = { w: q.w, m: sense, p: q.p || "", qText: qText, aText: aText };
   locked = false;
+  setFlag(false);
   $("word").textContent = qText;
   $("phonetic").textContent = isZh2En ? "" : (q.p || "");
   $("speakWord").style.display = isZh2En ? "none" : "";
@@ -439,23 +458,28 @@ function choose(btn, m) {
   locked = true;
   s.answered++;
   const right = m === current.aText;
+  const effective = right && !flagged;
   const buttons = [...document.querySelectorAll(".opt")];
   buttons.forEach(b => {
     b.classList.add("disabled");
     if (b.textContent === current.aText) { b.classList.add("correct"); b.insertAdjacentHTML("beforeend", '<span class="mark">✓</span>'); }
   });
-  if (right) {
+  if (effective) {
     s.correct++;
     bumpMastery(current.w, true);
     $("feedback").textContent = "回答正确!";
     $("feedback").className = "feedback good";
   } else {
-    bumpMastery(current.w, false);
-    btn.classList.add("wrong");
-    btn.insertAdjacentHTML("beforeend", '<span class="mark">✗</span>');
-    $("feedback").textContent = "正确答案:" + current.aText;
+    if (!right) {
+      btn.classList.add("wrong");
+      btn.insertAdjacentHTML("beforeend", '<span class="mark">✗</span>');
+    }
+    if (!flagged) {
+      bumpMastery(current.w, false);
+      addWrong(current);
+    }
+    $("feedback").textContent = flagged ? "已标记重点,按错记录 · 正确答案:" + current.aText : "正确答案:" + current.aText;
     $("feedback").className = "feedback bad";
-    addWrong(current);
   }
   updateScore();
   $("next").disabled = false;
@@ -518,6 +542,11 @@ $("next").onclick = () => { const s = sess(); s.idx++; renderQuestion(); };
 $("restart").onclick = () => newRound(ALL, "normal");
 $("again").onclick = () => newRound(ALL, "normal");
 $("speakWord").onclick = () => { if (current) speak(current.w); };
+$("flagBox").onclick = () => {
+  if (flagged) { setFlag(false); return; }
+  setFlag(true);
+  if (current) { addWrong(current); bumpMastery(current.w, false); }
+};
 function applyModeClass() {
   document.querySelector(".card").classList.toggle("zh2en", displayMode === "zh2en");
 }
