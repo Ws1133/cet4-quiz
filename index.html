@@ -402,7 +402,7 @@ function pickDistractors(word, sense, n) {
       out.push(r.m);
     }
   }
-  const crossCount = Math.floor(Math.random() * (n + 1));
+  const crossCount = 1 + Math.floor(Math.random() * n);
   const sameCount = n - crossCount;
   takeFrom(samePos, sameCount);
   const others = ALL_SENSES.filter(r => {
@@ -429,7 +429,7 @@ function pickWordDistractors(word, sense, n) {
       out.push(r.w);
     }
   }
-  const crossCount = Math.floor(Math.random() * (n + 1));
+  const crossCount = 1 + Math.floor(Math.random() * n);
   const sameCount = n - crossCount;
   take(samePos, sameCount);
   const others = ALL_SENSES.filter(r => {
