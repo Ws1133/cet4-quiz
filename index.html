@@ -382,39 +382,58 @@ function pickSense(entry) {
   return senses[Math.floor(Math.random() * senses.length)];
 }
 
+function fmtSense(s) {
+  if (!s) return s;
+  return s.replace(/(^|[；;，,\s])ad\./g, "$1adv.").replace(/(^|[；;，,\s])a\./g, "$1adj.");
+}
+
 function pickDistractors(word, sense, n) {
+  const mm = sense.match(POS_RE);
+  const pos = mm ? mm[1] : null;
+  const samePos = pos ? (POS_POOL[pos] || []) : [];
   const used = new Set([sense]);
   const out = [];
-  const mm = sense.match(POS_RE);
-  const samePos = mm ? (POS_POOL[mm[1]] || []) : [];
-  const pools = [samePos, ALL_SENSES];
-  for (const arr of pools) {
-    for (const r of arr) {
-      if (out.length >= n) break;
-      if (r.w === word || used.has(r.m)) continue;
+  function takeFrom(arr, limit) {
+    const pool = shuffle(arr.filter(r => r.w !== word && !used.has(r.m)));
+    for (const r of pool) {
+      if (out.length >= limit) break;
+      if (used.has(r.m)) continue;
       used.add(r.m);
       out.push(r.m);
     }
-    if (out.length >= n) break;
   }
+  takeFrom(samePos, Math.min(2, n - 1));
+  const others = ALL_SENSES.filter(r => {
+    const p = (r.m.match(POS_RE) || [])[1];
+    return p !== pos;
+  });
+  takeFrom(others, n);
+  if (out.length < n) takeFrom(ALL_SENSES, n);
   return out;
 }
 
 function pickWordDistractors(word, sense, n) {
   const mm = sense.match(POS_RE);
-  const samePos = mm ? (POS_POOL[mm[1]] || []) : [];
-  const pools = [samePos, ALL_SENSES];
+  const pos = mm ? mm[1] : null;
+  const samePos = pos ? (POS_POOL[pos] || []) : [];
   const used = new Set([word.toLowerCase()]);
   const out = [];
-  for (const arr of pools) {
-    for (const r of arr) {
-      if (out.length >= n) break;
+  function take(arr, limit) {
+    const pool = shuffle(arr.filter(r => !used.has(r.w.toLowerCase())));
+    for (const r of pool) {
+      if (out.length >= limit) break;
       if (used.has(r.w.toLowerCase())) continue;
       used.add(r.w.toLowerCase());
       out.push(r.w);
     }
-    if (out.length >= n) break;
   }
+  take(samePos, Math.min(2, n - 1));
+  const others = ALL_SENSES.filter(r => {
+    const p = (r.m.match(POS_RE) || [])[1];
+    return p !== pos;
+  });
+  take(others, n);
+  if (out.length < n) take(ALL_SENSES, n);
   return out;
 }
 
@@ -430,7 +449,7 @@ function renderQuestion() {
   current = { w: q.w, m: sense, p: q.p || "", qText: qText, aText: aText };
   locked = false;
   setFlag(false);
-  $("word").textContent = qText;
+  $("word").textContent = isZh2En ? fmtSense(qText) : qText;
   $("phonetic").textContent = isZh2En ? "" : (q.p || "");
   $("speakWord").style.display = isZh2En ? "none" : "";
   $("feedback").textContent = "";
@@ -444,7 +463,8 @@ function renderQuestion() {
   opts.forEach((m) => {
     const b = document.createElement("button");
     b.className = "opt";
-    b.textContent = m;
+    b.dataset.raw = m;
+    b.textContent = isZh2En ? m : fmtSense(m);
     b.onclick = () => choose(b, m);
     box.appendChild(b);
   });
@@ -462,7 +482,7 @@ function choose(btn, m) {
   const buttons = [...document.querySelectorAll(".opt")];
   buttons.forEach(b => {
     b.classList.add("disabled");
-    if (b.textContent === current.aText) { b.classList.add("correct"); b.insertAdjacentHTML("beforeend", '<span class="mark">✓</span>'); }
+    if (b.dataset.raw === current.aText) { b.classList.add("correct"); b.insertAdjacentHTML("beforeend", '<span class="mark">✓</span>'); }
   });
   if (effective) {
     s.correct++;
@@ -478,7 +498,7 @@ function choose(btn, m) {
       bumpMastery(current.w, false);
       addWrong(current);
     }
-    $("feedback").textContent = flagged ? "已标记重点,按错记录 · 正确答案:" + current.aText : "正确答案:" + current.aText;
+    $("feedback").textContent = (flagged ? "已标记重点,按错记录 · 正确答案:" : "正确答案:") + fmtSense(current.aText);
     $("feedback").className = "feedback bad";
   }
   updateScore();
@@ -520,7 +540,7 @@ function renderWrongList() {
     main.className = "wr-main";
     const w = document.createElement("span"); w.className = "wr-word"; w.textContent = x.w;
     const p = document.createElement("span"); p.className = "wr-ph"; p.textContent = x.p || "";
-    const m = document.createElement("span"); m.className = "wr-m"; m.textContent = x.m;
+    const m = document.createElement("span"); m.className = "wr-m"; m.textContent = fmtSense(x.m);
     main.appendChild(w); main.appendChild(p); main.appendChild(m);
     const right = document.createElement("div");
     right.className = "wr-right";
